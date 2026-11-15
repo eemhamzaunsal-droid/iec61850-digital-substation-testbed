@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber-Physical Digital Substation Control and Monitoring Panel</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050812;
+            --card-bg: rgba(15, 23, 42, 0.5);
+            --accent-blue: #00f0ff;
+            --accent-green: #00ff88;
+            --accent-red: #ff2a55;
+            --accent-yellow: #ffb800;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.06);
+            --border-glow: rgba(0, 240, 255, 0.3);
+            --font-sans: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --grid-color: rgba(255, 255, 255, 0.03);
+            --glass-blur: 16px;
+        }
+
+        /* Academic / IEEE Output Mode Styles */
+        body.academic-mode {
+            --bg-color: #ffffff;
+            --card-bg: #ffffff;
+            --accent-blue: #000000;
+            --accent-green: #333333;
+            --accent-red: #000000;
+            --accent-yellow: #555555;
+            --text-color: #000000;
+            --text-muted: #444444;
+            --border: #333333;
+            --font-sans: 'Times New Roman', Times, serif;
+            --font-mono: 'Times New Roman', Times, serif;
+            --grid-color: rgba(0, 0, 0, 0.15);
+        }
+
+        body {
+            margin: 0;
+            background: radial-gradient(circle at 10% 20%, rgba(0, 240, 255, 0.07) 0%, transparent 40%),
+                        radial-gradient(circle at 90% 80%, rgba(0, 255, 136, 0.07) 0%, transparent 40%),
+                        var(--bg-color);
+            background-attachment: fixed;
+            color: var(--text-color);
+            font-family: var(--font-sans);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: all 0.4s ease;
+        }
+
+        body.academic-mode { background: #ffffff; }
+
+        /* Header / Navbar - Premium Glass */
+        .navbar {
+            background: rgba(5, 8, 18, 0.6);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            padding: 0 30px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+        body.academic-mode .navbar {
+            background: #ffffff;
+            border-bottom: 2px solid #000;
+            box-shadow: none;
+        }
+
+        .nav-title {
+            font-weight: 700;
+            font-size: 1.25em;
+            letter-spacing: 1px;
+            margin-right: 40px;
+            background: linear-gradient(90deg, #ffffff, #a5b4fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        body.academic-mode .nav-title {
+            background: none;
+            -webkit-text-fill-color: #000;
+        }
+
+        .tab-btn {
+            padding: 24px 20px;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-weight: 500;
+            font-size: 0.95em;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .tab-btn:hover { color: var(--text-color); }
+        .tab-btn.active { color: var(--accent-blue); font-weight: 600; }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--accent-blue);
+            box-shadow: 0 -2px 10px var(--accent-blue);
+            border-radius: 3px 3px 0 0;
+        }
+        body.academic-mode .tab-btn.active { color: #000; }
+        body.academic-mode .tab-btn.active::after { background: #000; box-shadow: none; }
+
+        /* Premium Controls */
+        .controls-group {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-color);
+            backdrop-filter: blur(4px);
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+        .btn.active {
+            background: rgba(0, 240, 255, 0.15);
+            color: var(--accent-blue);
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+        }
+        body.academic-mode .btn {
+            border: 2px solid #000; background: #fff; color: #000; box-shadow: none;
+        }
+        body.academic-mode .btn.active { background: #000; color: #fff; }
+
+        /* Glowing LEDs */
+        .nav-status {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 0 25px;
+            border-left: 1px solid var(--border);
+            margin-left: 10px;
+        }
+        body.academic-mode .nav-status { border-left: 2px solid #000; }
+        .led-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75em;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+        body.academic-mode .led-item { color: #000; }
+        .led {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #334155;
+            transition: all 0.4s ease;
+        }
+        .led.online {
+            background: var(--accent-green);
+            box-shadow: 0 0 12px var(--accent-green), 0 0 24px rgba(0, 255, 136, 0.4);
+        }
+        body.academic-mode .led.online { background: #000; box-shadow: none; border: 1px solid #000; }
+        .led.offline {
+            background: var(--accent-red);
+            box-shadow: 0 0 12px var(--accent-red);
+        }
+        body.academic-mode .led.offline { background: transparent; border: 2px dashed #000; box-shadow: none; }
+
+        /* Main Content */
+        .content {
+            flex-grow: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .tab-content { display: none; animation: fadeIn 0.5s ease; }
+        .tab-content.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Grid Layout */
+        .graphs-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+        }
+        @media (max-width: 1200px) { .graphs-grid { grid-template-columns: 1fr; } }
+
+        /* Premium Glass Card */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.05);
+        }
+        body.academic-mode .card {
+            background: #ffffff; border: 1px solid #000; border-radius: 0; box-shadow: none; backdrop-filter: none;
+        }
+        body.academic-mode .card::before { display: none; }
+        body.academic-mode .card:hover { transform: none; box-shadow: none; }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+        }
+        body.academic-mode .card-header { border-bottom: 1px solid #000; }
+
+        .card-title {
+            font-size: 0.95em;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+        }
+        body.academic-mode .card-title { color: #000; font-weight: bold; }
+
+        .card-value {
+            font-family: var(--font-mono);
+            font-size: 1.3em;
+            font-weight: 600;
+            color: var(--accent-green);
+            text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+        }
+        body.academic-mode .card-value { color: #000; text-shadow: none; font-weight: normal; }
+
+        .chart-box {
+            position: relative;
+            height: 220px;
+            width: 100%;
+        }
+        body.academic-mode .chart-box { height: 180px; }
+
+        .breaker-chart-box {
+            position: relative;
+            height: 45px;
+            width: 100%;
+            border-top: 1px dashed var(--border);
+            padding-top: 5px;
+            margin-top: 5px;
+        }
+        body.academic-mode .breaker-chart-box { border-top: 1px dashed #000; height: 35px; }
+
+        /* IED Detail Grid */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+        }
+        @media (max-width: 1000px) { .detail-grid { grid-template-columns: 1fr; } }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+        .data-table tr {
+            border-bottom: 1px solid var(--border);
+        }
+        body.academic-mode .data-table tr { border-bottom: 1px solid #ddd; }
+        .data-table tr:last-child { border-bottom: none; }
+        .data-table td {
+            padding: 12px 6px;
+        }
+        .data-table .label { color: var(--text-muted); font-weight: 300; }
+        body.academic-mode .data-table .label { color: #555; font-weight: bold; }
+        .data-table .value {
+            font-family: var(--font-mono);
+            text-align: right;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        body.academic-mode .data-table .value { color: #000; }
+        .data-table .alert-val {
+            color: var(--accent-red);
+            font-weight: 700;
+            text-shadow: 0 0 8px rgba(255, 42, 85, 0.4);
+        }
+        body.academic-mode .data-table .alert-val { color: #000; text-shadow: none; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="nav-title">CPS SUBSTATION MONITOR</div>
+        
+        <button class="tab-btn active" onclick="openTab('graphs-section')">LIVE CHARTS & TELEMETRY</button>
+        <button class="tab-btn" onclick="openTab('ied-section')">IED DEVICE STATUS</button>
+
+        <div class="controls-group">
+            <button id="freeze-btn" class="btn" onclick="toggleFreeze()">FREEZE / INSPECT</button>
+            <button id="academic-btn" class="btn" onclick="toggleAcademicMode()">ACADEMIC (IEEE) OUTPUT MODE</button>
+        </div>
+
+        <div class="nav-status">
+            <div class="led-item">Merging Unit <div id="led_MU" class="led"></div></div>
+            <div class="led-item">Protection IED <div id="led_PROT" class="led"></div></div>
+            <div class="led-item">Breaker BCU <div id="led_BCU" class="led"></div></div>
+        </div>
+    </nav>
+
+    <div class="content">
+
+        <!-- TAB: LIVE CHARTS -->
+        <div id="graphs-section" class="tab-content active">
+            <div class="graphs-grid">
+                
+                <!-- MODULE 1: Feeder 1 Current & Breaker Chronology -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">1. Feeder 1 Current Analysis & Breaker Chronology (CT1)</span>
+                        <span class="card-value" id="val_i_f1">0.0 A</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_i_f1"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_f1"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 2: Bus 3 -> Bus 4 Current -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">2. Bus 3 -> Bus 4 Current Analysis</span>
+                        <span class="card-value" id="val_i_3_4">0.0 A</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_i_3_4"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_3_4"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 3: Bus 3 Voltage -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">3. Bus 3 Voltage</span>
+                        <span class="card-value" id="val_v_b3">0.0 V</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_v_b3"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_b3"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 4: Bus 4 Voltage -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">4. Bus 4 Voltage</span>
+                        <span class="card-value" id="val_v_b4">0.0 V</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_v_b4"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_b4"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 5: Feeder 1 Power Analysis (P & Q) -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">5. Feeder 1 Active/Reactive Power Consumption (Load 1)</span>
+                        <span class="card-value" id="val_pq_f1">P: 0.0 MW | Q: 0.0 MVar</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_pq_f1"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_pq1"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 6: Feeder 2 Power Analysis (P & Q) -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">6. Feeder 2 Active/Reactive Power Consumption (Load 2)</span>
+                        <span class="card-value" id="val_pq_f2">P: 0.0 MW | Q: 0.0 MVar</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_pq_f2"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_pq2"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 7: GOOSE Delay & Jitter Analysis -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">7. GOOSE Trip Propagation Delay & Jitter (RTT)</span>
+                        <span class="card-value" id="val_rtt">0.00 ms</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_rtt"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_rtt"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 8: Process Bus Traffic Rate -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">8. Process Bus Network Traffic Distribution (Packets/sec)</span>
+                        <span class="card-value" id="val_traffic">SV: 0 pps | GOOSE: 0 pps</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_traffic"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_traffic"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 9: Security Margin & BFP Countdown -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">9. Protection Security Margin & BFP Countdown</span>
+                        <span class="card-value" id="val_bfp_cd">BFP Countdown: 0.15 s</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_bfp"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_bfp"></canvas>
+                    </div>
+                </div>
+
+                <!-- MODULE 10: Transformer Quality & Efficiency -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">10. Transformer Losses, Efficiency & Power Factors</span>
+                        <span class="card-value" id="val_trafo_eff">Efficiency: 100.0% | Cosφ1: 1.00</span>
+                    </div>
+                    <div class="chart-box">
+                        <canvas id="chart_trafo"></canvas>
+                    </div>
+                    <div class="breaker-chart-box">
+                        <canvas id="chart_brk_trafo"></canvas>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- TAB: IED DEVICE STATUS -->
+        <div id="ied-section" class="tab-content">
+            <div class="detail-grid">
+                
+                <!-- Merging Unit -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Merging Unit (MU_1)</span>
+                    </div>
+                    <table class="data-table">
+                        <tr><td class="label">Communication</td><td class="value" id="mu_conn">OFFLINE</td></tr>
+                        <tr><td class="label">Published Protocol</td><td class="value">IEC 61850-9-2 SV</td></tr>
+                        <tr><td class="label">Process Bus Interface</td><td class="value">eth0 (VLAN 10)</td></tr>
+                        <tr><td class="label">Simulation Interface</td><td class="value">eth1 (VLAN 30)</td></tr>
+                    </table>
+                </div>
+
+                <!-- Protection IED -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Protection IED (IED2_PROT)</span>
+                    </div>
+                    <table class="data-table">
+                        <tr><td class="label">Communication</td><td class="value" id="prot_conn">OFFLINE</td></tr>
+                        <tr><td class="label">Trip Status</td><td class="value" id="prot_trip_val">NORMAL</td></tr>
+                        <tr><td class="label">BFP Status</td><td class="value" id="prot_bfp_val">STANDBY</td></tr>
+                        <tr><td class="label">Overcurrent Threshold</td><td class="value">200.0 A</td></tr>
+                        <tr><td class="label">MMS Server Status</td><td class="value">ACTIVE (Port 102)</td></tr>
+                    </table>
+                </div>
+
+                <!-- Breaker IED (BCU) -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Breaker Control Unit (IED3_BCU)</span>
+                    </div>
+                    <table class="data-table">
+                        <tr><td class="label">Communication</td><td class="value" id="bcu_conn">OFFLINE</td></tr>
+                        <tr><td class="label">Physical Breaker (CB1)</td><td class="value" id="bcu_cb1_val">CLOSED</td></tr>
+                        <tr><td class="label">MMS Control Status</td><td class="value">ACTIVE (Port 102)</td></tr>
+                        <tr><td class="label">Hardware UDP Output</td><td class="value" style="color:var(--accent-blue)">ACTIVE (Port 5006)</td></tr>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const socket = io();
+        // English (en-US) number format: thousands ',' and decimal '.'
+        function formatNumberEnUS(val) {
+            const n = Number(val);
+            if (!isFinite(n)) return String(val);
+            const dec = Number.isInteger(n) ? 0 : 2;
+            return n.toLocaleString('en-US', {minimumFractionDigits: dec, maximumFractionDigits: dec});
+        }
+        let academicMode = false;
+        let isFrozen = false;
+        const chartsList = [];
+
+        function openTab(id) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        function toggleFreeze() {
+            isFrozen = !isFrozen;
+            const btn = document.getElementById('freeze-btn');
+            if (isFrozen) {
+                btn.classList.add('active');
+                btn.innerText = "RESUME LIVE STREAM";
+            } else {
+                btn.classList.remove('active');
+                btn.innerText = "FREEZE / INSPECT";
+            }
+        }
+
+        function toggleAcademicMode() {
+            academicMode = !academicMode;
+            document.body.classList.toggle('academic-mode', academicMode);
+            const btn = document.getElementById('academic-btn');
+            btn.classList.toggle('active', academicMode);
+            
+            // Update chart styling
+            const isDark = !academicMode;
+            chartsList.forEach(cObj => {
+                const chart = cObj.chart;
+                chart.options.scales.x.grid.color = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)';
+                chart.options.scales.y.grid.color = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)';
+                chart.options.scales.x.ticks.color = isDark ? '#888' : '#000';
+                chart.options.scales.y.ticks.color = isDark ? '#888' : '#000';
+                
+                chart.options.scales.x.ticks.font = {
+                    family: academicMode ? 'Times New Roman' : 'Outfit',
+                    size: academicMode ? 11 : 9
+                };
+                chart.options.scales.y.ticks.font = {
+                    family: academicMode ? 'Times New Roman' : 'Outfit',
+                    size: academicMode ? 12 : 9
+                };
+
+                if (chart.options.scales.x.title) {
+                    chart.options.scales.x.title.color = isDark ? '#888' : '#000';
+                    chart.options.scales.x.title.font = {
+                        family: academicMode ? 'Times New Roman' : 'Outfit',
+                        size: academicMode ? 12 : 10,
+                        weight: academicMode ? 'bold' : 'normal'
+                    };
+                }
+
+                if (chart.options.plugins.legend) {
+                    chart.options.plugins.legend.labels.color = isDark ? '#fff' : '#000';
+                    chart.options.plugins.legend.labels.font = {
+                        family: academicMode ? 'Times New Roman' : 'Outfit',
+                        size: academicMode ? 11 : 10
+                    };
+                }
+
+                cObj.datasets.forEach((dSetup, idx) => {
+                    const ds = chart.data.datasets[idx];
+                    if (academicMode) {
+                        ds.borderColor = dSetup.academicColor;
+                        ds.borderDash = dSetup.academicDash || [];
+                        ds.pointStyle = dSetup.academicMarker || 'circle';
+                        ds.pointRadius = dSetup.academicMarker ? 4 : 0;
+                        ds.borderWidth = 2;
+                    } else {
+                        ds.borderColor = dSetup.scadaColor;
+                        ds.borderDash = [];
+                        ds.pointStyle = 'circle';
+                        ds.pointRadius = 0;
+                        ds.borderWidth = 1.5;
+                    }
+                });
+
+                chart.update('none');
+            });
+        }
+
+        // Chart initialization helper
+        function initChart(canvasId, datasetsConfig, stepped = false) {
+            const datasets = datasetsConfig.map(cfg => ({
+                label: cfg.label,
+                data: [],
+                borderColor: cfg.scadaColor,
+                borderWidth: 1.5,
+                fill: false,
+                tension: stepped ? 0 : 0.2,
+                stepped: stepped,
+                pointRadius: 0
+            }));
+
+            const chart = new Chart(document.getElementById(canvasId).getContext('2d'), {
+                type: 'line',
+                data: { labels: [], datasets: datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: datasetsConfig.length > 0 } },
+                    scales: {
+                        x: {
+                            display: !stepped,
+                            title: {
+                                display: !stepped,
+                                text: 'Time (s)',
+                                color: '#888',
+                                font: { size: 10, family: 'Outfit' }
+                            },
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { font: { size: 9 }, color: '#888', maxTicksLimit: 8, maxRotation: 0 }
+                        },
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { font: { size: 9 }, color: '#888' }
+                        }
+                    }
+                }
+            });
+
+            // English number format on y-axis ticks and tooltips
+            chart.options.scales.y.ticks.callback = v => formatNumberEnUS(v);
+            chart.options.plugins.tooltip = { callbacks: { label: ctx => {
+                const v = ctx.parsed.y;
+                const l = ctx.dataset.label || '';
+                return l ? `${l}: ${formatNumberEnUS(v)}` : formatNumberEnUS(v);
+            } } };
+            chart.update('none');
+
+            chartsList.push({ chart: chart, datasets: datasetsConfig });
+            return chart;
+        }
+
+        // --- BREAKER STEP-LINE DEFINITIONS ---
+        const brkConfig = [
+            { label: "CB1 (Breaker)", scadaColor: "#00ff88", academicColor: "#444444", academicDash: [4, 4] }
+        ];
+
+        // 10 Module Chart Definitions
+        const c_i_f1 = initChart('chart_i_f1', [{ label: "Feeder 1 Current (A)", scadaColor: "#00ff88", academicColor: "#000000" }]);
+        const c_brk_f1 = initChart('chart_brk_f1', brkConfig, true);
+
+        const c_i_3_4 = initChart('chart_i_3_4', [{ label: "Bus 3 -> 4 Current (A)", scadaColor: "#00ff88", academicColor: "#000000" }]);
+        const c_brk_3_4 = initChart('chart_brk_3_4', brkConfig, true);
+
+        const c_v_b3 = initChart('chart_v_b3', [{ label: "Bus 3 Voltage (V)", scadaColor: "#00d2ff", academicColor: "#000000" }]);
+        const c_brk_b3 = initChart('chart_brk_b3', brkConfig, true);
+
+        const c_v_b4 = initChart('chart_v_b4', [{ label: "Bus 4 Voltage (V)", scadaColor: "#ff4757", academicColor: "#000000" }]);
+        const c_brk_b4 = initChart('chart_brk_b4', brkConfig, true);
+
+        const c_pq_f1 = initChart('chart_pq_f1', [
+            { label: "P1 (MW)", scadaColor: "#00ff88", academicColor: "#000000" },
+            { label: "Q1 (MVar)", scadaColor: "#f1c40f", academicColor: "#888888", academicDash: [4, 4] }
+        ]);
+        const c_brk_pq1 = initChart('chart_brk_pq1', brkConfig, true);
+
+        const c_pq_f2 = initChart('chart_pq_f2', [
+            { label: "P2 (MW)", scadaColor: "#00ff88", academicColor: "#000000" },
+            { label: "Q2 (MVar)", scadaColor: "#f1c40f", academicColor: "#888888", academicDash: [4, 4] }
+        ]);
+        const c_brk_pq2 = initChart('chart_brk_pq2', brkConfig, true);
+
+        const c_rtt = initChart('chart_rtt', [{ label: "RTT Delay (ms)", scadaColor: "#f1c40f", academicColor: "#000000" }]);
+        const c_brk_rtt = initChart('chart_brk_rtt', brkConfig, true);
+
+        const c_traffic = initChart('chart_traffic', [
+            { label: "SV pps", scadaColor: "#00ff88", academicColor: "#000000" },
+            { label: "GOOSE pps", scadaColor: "#ff4757", academicColor: "#555555", academicDash: [4, 4] },
+            { label: "MMS pps", scadaColor: "#00d2ff", academicColor: "#999999", academicDash: [2, 2] }
+        ]);
+        const c_brk_traffic = initChart('chart_brk_traffic', brkConfig, true);
+
+        const c_bfp = initChart('chart_bfp', [
+            { label: "Security Margin (%)", scadaColor: "#00d2ff", academicColor: "#000000" },
+            { label: "BFP Remaining (s)", scadaColor: "#ff4757", academicColor: "#888888", academicDash: [4, 4] }
+        ]);
+        const c_brk_bfp = initChart('chart_brk_bfp', brkConfig, true);
+
+        const c_trafo = initChart('chart_trafo', [
+            { label: "Losses (MW)", scadaColor: "#ff4757", academicColor: "#000000" },
+            { label: "Efficiency (%)", scadaColor: "#00ff88", academicColor: "#444444", academicDash: [2, 2] },
+            { label: "Cosφ1", scadaColor: "#00d2ff", academicColor: "#888888", academicDash: [4, 4] },
+            { label: "Cosφ2", scadaColor: "#f1c40f", academicColor: "#aaaaaa", academicDash: [1, 2] }
+        ]);
+        const c_brk_trafo = initChart('chart_brk_trafo', brkConfig, true);
+
+        const startTime = Date.now();
+
+        // Bulk data push to charts
+        function pushData(chart, values, timeLabel) {
+            chart.data.labels.push(timeLabel);
+            values.forEach((v, idx) => {
+                chart.data.datasets[idx].data.push(v);
+            });
+            if (chart.data.labels.length > 50) {
+                chart.data.labels.shift();
+                values.forEach((_, idx) => chart.data.datasets[idx].data.shift());
+            }
+            chart.update('none');
+        }
+
+        // Convert breaker state to binary value
+        function brkVal(status) {
+            return (status === "CLOSED" || status === "KAPALI") ? 1 : 0;
+        }
+
+        // WebSocket Data Receiver
+        socket.on('update', function(data) {
+            if (isFrozen) return;
+
+            const timeLabel = ((Date.now() - startTime) / 1000).toFixed(1) + "s";
+
+            // Update numerical values in cards
+            document.getElementById('val_i_f1').innerText = `${data.i_f1.toFixed(1)} A`;
+            document.getElementById('val_i_3_4').innerText = `${data.i_3_4.toFixed(1)} A`;
+            document.getElementById('val_v_b3').innerText = `${data.v_b3.toFixed(0)} V`;
+            document.getElementById('val_v_b4').innerText = `${data.v_b4.toFixed(0)} V`;
+            document.getElementById('val_pq_f1').innerText = `P: ${data.p_f1.toFixed(2)} MW | Q: ${data.q_f1.toFixed(2)} MVar`;
+            document.getElementById('val_pq_f2').innerText = `P: ${data.p_f2.toFixed(2)} MW | Q: ${data.q_f2.toFixed(2)} MVar`;
+            document.getElementById('val_rtt').innerText = `${data.rtt.toFixed(2)} ms`;
+            document.getElementById('val_traffic').innerText = `SV: ${data.sv_pps} pps | GOOSE: ${data.goose_pps} pps`;
+            document.getElementById('val_bfp_cd').innerText = `BFP Countdown: ${data.bfp_cd.toFixed(2)} s`;
+            document.getElementById('val_trafo_eff').innerText = `Eff: ${data.efficiency.toFixed(1)}% | Cosφ1: ${data.cos_phi_f1.toFixed(2)}`;
+
+            // Breaker Status
+            const brkData = [brkVal(data.breakers.F1)];
+
+            // Update all graphs
+            pushData(c_i_f1, [data.i_f1], timeLabel);
+            pushData(c_brk_f1, brkData, timeLabel);
+
+            pushData(c_i_3_4, [data.i_3_4], timeLabel);
+            pushData(c_brk_3_4, brkData, timeLabel);
+
+            pushData(c_v_b3, [data.v_b3], timeLabel);
+            pushData(c_brk_b3, brkData, timeLabel);
+
+            pushData(c_v_b4, [data.v_b4], timeLabel);
+            pushData(c_brk_b4, brkData, timeLabel);
+
+            pushData(c_pq_f1, [data.p_f1, data.q_f1], timeLabel);
+            pushData(c_brk_pq1, brkData, timeLabel);
+
+            pushData(c_pq_f2, [data.p_f2, data.q_f2], timeLabel);
+            pushData(c_brk_pq2, brkData, timeLabel);
+
+            pushData(c_rtt, [data.rtt], timeLabel);
+            pushData(c_brk_rtt, brkData, timeLabel);
+
+            pushData(c_traffic, [data.sv_pps, data.goose_pps, data.mms_pps], timeLabel);
+            pushData(c_brk_traffic, brkData, timeLabel);
+
+            // Protection margin: % of current threshold (200A)
+            const margin = (data.i_f1 / 200.0) * 100.0;
+            pushData(c_bfp, [margin, data.bfp_cd], timeLabel);
+            pushData(c_brk_bfp, brkData, timeLabel);
+
+            pushData(c_trafo, [data.loss_mw, data.efficiency, data.cos_phi_f1, data.cos_phi_f2], timeLabel);
+            pushData(c_brk_trafo, brkData, timeLabel);
+        });
+
+        // Telemetry Online/Offline States
+        socket.on('telemetry_update', function(machines) {
+            for (let id in machines) {
+                const m = machines[id];
+                const led = document.getElementById(`led_${id}`);
+                const connText = document.getElementById(`${id.toLowerCase()}_conn`);
+                
+                if (m.status === "ONLINE") {
+                    led.className = "led online";
+                    if (connText) {
+                        connText.innerText = "ONLINE";
+                        connText.style.color = "var(--accent-green)";
+                    }
+                    if (id === "PROT" && connText) {
+                        document.getElementById('prot_trip_val').innerText = m.details.trip ? "TRIP (ACTIVE)" : "NORMAL";
+                        document.getElementById('prot_trip_val').style.color = m.details.trip ? "var(--accent-red)" : "var(--accent-green)";
+                        document.getElementById('prot_bfp_val').innerText = m.details.bfp ? "ACTIVE (ALARM)" : "STANDBY";
+                        document.getElementById('prot_bfp_val').style.color = m.details.bfp ? "var(--accent-red)" : "var(--accent-green)";
+                    }
+                    if (id === "BCU" && connText) {
+                        document.getElementById('bcu_cb1_val').innerText = m.details.breaker ? "CLOSED (ON)" : "OPEN (OFF)";
+                        document.getElementById('bcu_cb1_val').style.color = m.details.breaker ? "var(--accent-green)" : "var(--accent-red)";
+                    }
+                } else {
+                    led.className = "led offline";
+                    if (connText) {
+                        connText.innerText = "OFFLINE";
+                        connText.style.color = "var(--accent-red)";
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python packages
+RUN pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check \
+    pandapower \
+    flask \
+    flask-socketio \
+    numpy \
+    matplotlib
+
+# Copy simulation files
+COPY streamer.py /app/
+COPY digital_substation.py /app/
+COPY network_config.json /app/
+COPY web_app.py /app/
+COPY templates /app/templates
+
+CMD ["python", "streamer.py"]

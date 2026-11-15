@@ -1,0 +1,244 @@
+version: '3.3'
+
+services:
+  # ─────────────────────────────────────────────────────────────
+  # MU_1 (Merging Unit)
+  #   eth0 → VLAN10 (Process Bus)   MAC: 02:42:01:10:00:01
+  #   eth1 → VLAN30 (Sim Net)       MAC: 02:42:01:30:00:01
+  # ─────────────────────────────────────────────────────────────
+  mu_publisher:
+    build: .
+    container_name: mu_publisher
+    entrypoint: >
+      sh -c "
+        ip link set eth0 address 02:42:01:10:00:01 &&
+        ip link set eth1 address 02:42:01:30:00:01 &&
+        exec ./mu_publisher eth0 eth1
+      "
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      process_bus_net:
+        ipv4_address: ${LINUX_1_IP_VLAN10}
+      placeholder_net:
+      simulation_net:
+        ipv4_address: ${LINUX_1_IP_VLAN30}
+    environment:
+      - WINDOWS_IP=${WINDOWS_IP}
+      - SCADA_IP=${LINUX_SCADA_IP_VLAN20}
+    volumes:
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ─────────────────────────────────────────────────────────────
+  # Protection IED_1
+  #   eth0 → VLAN10 (Process Bus)   MAC: 02:42:02:10:00:01
+  #   eth1 → VLAN20 (Station Bus)   MAC: 02:42:02:20:00:01
+  # ─────────────────────────────────────────────────────────────
+  protection_ied:
+    build: .
+    container_name: protection_ied
+    entrypoint: >
+      sh -c "
+        ip link set eth0 address 02:42:02:10:00:01 &&
+        ip link set eth1 address 02:42:02:20:00:01 &&
+        exec ./protection_ied eth0 eth1
+      "
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      process_bus_net:
+        ipv4_address: ${LINUX_2_IP_VLAN10}
+      station_bus_net:
+        ipv4_address: ${LINUX_2_IP_VLAN20}
+    environment:
+      - WINDOWS_IP=${WINDOWS_IP}
+      - SCADA_IP=${LINUX_SCADA_IP_VLAN20}
+    volumes:
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mu_publisher
+
+  # ─────────────────────────────────────────────────────────────
+  # Breaker IED_1 (BCU)
+  #   eth0 → VLAN10 (Process Bus)   MAC: 02:42:03:10:00:01
+  #   eth1 → VLAN20 (Station Bus)   MAC: 02:42:03:20:00:01
+  #   eth2 → VLAN30 (Sim Net)       MAC: 02:42:03:30:00:01
+  # ─────────────────────────────────────────────────────────────
+  breaker_ied:
+    build: .
+    container_name: breaker_ied
+    entrypoint: >
+      sh -c "
+        ip link set eth0 address 02:42:03:10:00:01 &&
+        ip link set eth1 address 02:42:03:20:00:01 &&
+        ip link set eth2 address 02:42:03:30:00:01 &&
+        exec ./breaker_ied eth0 eth1 eth2
+      "
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      process_bus_net:
+        ipv4_address: ${LINUX_3_IP_VLAN10}
+      station_bus_net:
+        ipv4_address: ${LINUX_3_IP_VLAN20}
+      placeholder_net:
+      simulation_net:
+        ipv4_address: ${LINUX_3_IP_VLAN30}
+    environment:
+      - WINDOWS_IP=${WINDOWS_IP}
+      - SCADA_IP=${LINUX_SCADA_IP_VLAN20}
+    volumes:
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - protection_ied
+
+  # ─────────────────────────────────────────────────────────────
+  # Control IED_1
+  #   eth0 → VLAN10 (Process Bus)   MAC: 02:42:04:10:00:01
+  #   eth1 → VLAN20 (Station Bus)   MAC: 02:42:04:20:00:01
+  # ─────────────────────────────────────────────────────────────
+  control_ied:
+    build: .
+    container_name: control_ied
+    entrypoint: >
+      sh -c "
+        ip link set eth0 address 02:42:04:10:00:01 &&
+        ip link set eth1 address 02:42:04:20:00:01 &&
+        exec ./control_ied eth0 eth1
+      "
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      process_bus_net:
+        ipv4_address: ${LINUX_CTRL_IP_VLAN10}
+      station_bus_net:
+        ipv4_address: ${LINUX_CTRL_IP_VLAN20}
+    environment:
+      - WINDOWS_IP=${WINDOWS_IP}
+      - PROT_IP=${LINUX_2_IP_VLAN20}
+    volumes:
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - protection_ied
+
+  # ─────────────────────────────────────────────────────────────
+  # SCADA Monitor
+  #   eth0 → VLAN20 (Station Bus)   MAC: 02:42:05:20:00:01
+  # ─────────────────────────────────────────────────────────────
+  scada_monitor:
+    build: .
+    container_name: scada_monitor
+    entrypoint: >
+      sh -c "
+        ip link set eth0 address 02:42:05:20:00:01 &&
+        exec ./scada_monitor
+      "
+    stdin_open: true
+    tty: true
+    cap_add:
+      - NET_ADMIN
+    networks:
+      station_bus_net:
+        ipv4_address: ${LINUX_SCADA_IP_VLAN20}
+    environment:
+      - PROT_IP=${LINUX_2_IP_VLAN20}
+      - BCU_IP=${LINUX_3_IP_VLAN20}
+    depends_on:
+      - mu_publisher
+      - protection_ied
+      - breaker_ied
+      - control_ied
+
+  # ─────────────────────────────────────────────────────────────
+  # Power Simulator (streamer.py)
+  #   eth0 → VLAN30 (Sim Net)       MAC: 02:42:06:30:00:01
+  # ─────────────────────────────────────────────────────────────
+  power_simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamer
+    container_name: power_simulator
+    stdin_open: true
+    tty: true
+    mac_address: "02:42:06:30:00:01"
+    ports:
+      - "5000:5000"
+      - "5006:5006/udp"
+    networks:
+      simulation_net:
+        ipv4_address: ${LINUX_SIM_IP_VLAN30}
+      bridge_net:
+    environment:
+      - WINDOWS_IP=${WINDOWS_IP}
+      - LINUX_1_IP_VLAN10=${LINUX_1_IP_VLAN30}
+      - UDP_PORT=${UDP_PORT}
+      - CONTROL_PORT=${CONTROL_PORT}
+
+  # ─────────────────────────────────────────────────────────────
+  # GOOSE Attacker (siber saldiri modulu) — yalnizca izole testbed
+  #   eth0 → VLAN10 (Process Bus)    MAC: 02:42:09:10:00:01
+  #   Varsayilan olarak BASLAMAZ; "attack" profili ile calisir:
+  #     docker compose --profile attack run --rm goose_attacker
+  # ─────────────────────────────────────────────────────────────
+  goose_attacker:
+    build: .
+    container_name: goose_attacker
+    entrypoint: >
+      sh -c "
+        ip link set eth0 address 02:42:09:10:00:01 &&
+        exec ./goose_attacker -i eth0 -m ${ATTACK_MODE:-trip} -c ${ATTACK_COUNT:-0} -p ${ATTACK_PERIOD_MS:-50}
+      "
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      process_bus_net:
+        ipv4_address: ${LINUX_ATTACKER_IP_VLAN10}
+    volumes:
+      - ./logs:/app/logs
+    profiles:
+      - attack
+
+networks:
+  process_bus_net:
+    driver: macvlan
+    driver_opts:
+      parent: ${PARENT_INTERFACE}.10
+    ipam:
+      config:
+        - subnet: 10.10.10.0/24
+
+  station_bus_net:
+    driver: macvlan
+    driver_opts:
+      parent: ${PARENT_INTERFACE}.20
+    ipam:
+      config:
+        - subnet: 10.10.20.0/24
+
+  simulation_net:
+    driver: macvlan
+    driver_opts:
+      parent: ${PARENT_INTERFACE}.30
+    ipam:
+      config:
+        - subnet: 10.10.30.0/24
+
+  bridge_net:
+    driver: bridge
+
+  placeholder_net:
+    driver: bridge
+    internal: true

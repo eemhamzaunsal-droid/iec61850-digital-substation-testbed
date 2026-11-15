@@ -1,0 +1,25 @@
+# Build outputs (compiled IED binaries are produced inside the Docker image)
+mu_publisher
+protection_ied
+breaker_ied
+control_ied
+scada_monitor
+goose_attacker
+*.o
+*.a
+*.so
+*.obj
+*.exe
+
+# Vendored libiec61850 build tree (rebuilt by the Dockerfile)
+libiec61850/build/
+
+# Runtime artefacts
+logs/
+prot_fault.cfg
+scada_fault_history.log
+*.log
+__pycache__/
+*.pyc
+.venv/
+venv/

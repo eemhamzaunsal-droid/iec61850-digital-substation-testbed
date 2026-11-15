@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  mu_publisher:
+    build: .
+    container_name: mu_publisher_win
+    command: ["./mu_publisher", "eth0"]
+    networks:
+      - substation_net_win
+    ports:
+      # Windows (streamer.py) bu porttan UDP verisi gönderecek
+      - "5005:5005/udp"
+    environment:
+      # Docker Desktop, Windows'un kendisine 'host.docker.internal' adresiyle ulaşabilir
+      - WINDOWS_IP=host.docker.internal
+      - SCADA_IP=scada_monitor_win
+
+  protection_ied:
+    build: .
+    container_name: protection_ied_win
+    command: ["./protection_ied", "eth0"]
+    networks:
+      - substation_net_win
+    environment:
+      - WINDOWS_IP=host.docker.internal
+      - SCADA_IP=scada_monitor_win
+    depends_on:
+      - mu_publisher
+
+  breaker_ied:
+    build: .
+    container_name: breaker_ied_win
+    command: ["./breaker_ied", "eth0"]
+    networks:
+      - substation_net_win
+    environment:
+      - WINDOWS_IP=host.docker.internal
+      - SCADA_IP=scada_monitor_win
+    depends_on:
+      - protection_ied
+
+  scada_monitor:
+    build: .
+    container_name: scada_monitor_win
+    command: ["./scada_monitor"]
+    stdin_open: true
+    tty: true
+    networks:
+      - substation_net_win
+    environment:
+      # Konteynerler DNS adlarıyla haberleşecek (IP atamaya gerek yok)
+      - MU_IP=mu_publisher_win
+      - PROT_IP=protection_ied_win
+      - BCU_IP=breaker_ied_win
+      - WINDOWS_IP=host.docker.internal
+    depends_on:
+      - mu_publisher
+      - protection_ied
+      - breaker_ied
+
+networks:
+  # Windows için standart sanal Docker köprü ağı
+  substation_net_win:
+    driver: bridge
