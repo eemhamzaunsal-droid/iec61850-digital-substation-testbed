@@ -1,0 +1,2 @@
+# Packet captures are binary evidence files; never normalise line endings.
+*.pcap binary
