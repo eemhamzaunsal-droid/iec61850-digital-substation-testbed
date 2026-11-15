@@ -8,13 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Install python packages
+# Install python packages (exact versions pinned in requirements.txt)
+COPY requirements.txt /app/
 RUN pip install --no-cache-dir --root-user-action=ignore --disable-pip-version-check \
-    pandapower \
-    flask \
-    flask-socketio \
-    numpy \
-    matplotlib
+    -r /app/requirements.txt
 
 # Copy simulation files
 COPY streamer.py /app/

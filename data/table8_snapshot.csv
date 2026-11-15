@@ -1,0 +1,3 @@
+state,condition,cb1,bus3_v,bus4_v,line4_i_a,ct1_i_a
+normal,"47.8 MW / -3.9 Mvar, CB1 closed",closed,136350.0,137001.5,219.6,219.6
+post_trip,"150 MW / 50 Mvar, CB1 open",open,136350.0,130692.1,14.0,0.0
